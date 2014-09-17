@@ -79,15 +79,17 @@ public class Test implements ApplicationListener {
 
     @Override
     public void render() {
-//        Gdx.gl.glClearColor(1, 1, 1, 1);
-        Gdx.gl.glClearColor(0, 0, 0, 0);
+        Gdx.gl.glClearColor(1, 1, 1, 1);
+//        Gdx.gl.glClearColor(0, 0, 0, 0);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         batch.begin();
+/*
         if (pixmap != null) {
             Texture texture = new Texture(pixmap);
             batch.draw(texture, 0, 0, w, h);
         }
+*/
 
         font.draw(batch, "FPS: " + Gdx.graphics.getFramesPerSecond(), 10, 20);
         batch.end();
