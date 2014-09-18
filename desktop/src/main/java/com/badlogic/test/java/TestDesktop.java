@@ -9,7 +9,6 @@ public class TestDesktop {
 		LwjglApplicationConfiguration config = new LwjglApplicationConfiguration();
         config.width = 854;
         config.height = 480;
-        config.useGL30 = true;
 		new LwjglApplication(new Test(), config);
 	}
 }

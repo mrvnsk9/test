@@ -9,7 +9,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.Gdx2DPixmap;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.utils.GdxRuntimeException;
+import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
 import uk.co.caprica.vlcj.binding.LibVlc;
@@ -17,29 +17,20 @@ import uk.co.caprica.vlcj.player.MediaPlayerFactory;
 import uk.co.caprica.vlcj.player.direct.BufferFormat;
 import uk.co.caprica.vlcj.player.direct.BufferFormatCallback;
 import uk.co.caprica.vlcj.player.direct.DirectMediaPlayer;
-import uk.co.caprica.vlcj.player.direct.RenderCallbackAdapter;
-import uk.co.caprica.vlcj.player.direct.format.RV32BufferFormat;
+import uk.co.caprica.vlcj.player.direct.RenderCallback;
 import uk.co.caprica.vlcj.runtime.RuntimeUtil;
 import uk.co.caprica.vlcj.runtime.x.LibXUtil;
 
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferInt;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.IntBuffer;
 
 public class Test implements ApplicationListener {
 
     private BitmapFont font;
     private SpriteBatch batch;
 
-    float w = 720;
+    float w = 854;
     float h = 480;
 
-    private BufferedImage image;
-
-    private Texture texture;
     private Pixmap pixmap;
 
     @Override
@@ -59,15 +50,13 @@ public class Test implements ApplicationListener {
 
         Native.loadLibrary(RuntimeUtil.getLibVlcLibraryName(), LibVlc.class);
 
-        image = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration().createCompatibleImage((int) w, (int) h);
-        image.setAccelerationPriority(1.0f);
-
         String[] args = {"--no-video-title-show", "--verbose=3"};
-        String media = "D:\\3 Days To Kill (2014).m4v";
+        String media = "D:\\big_buck_bunny_480p_h264.mov";
 
         MediaPlayerFactory factory = new MediaPlayerFactory(args);
         DirectMediaPlayer mediaPlayer = factory.newDirectMediaPlayer(new TestBufferFormatCallback(), new TestRenderCallback());
-        mediaPlayer.playMedia(media);
+        boolean started = mediaPlayer.prepareMedia(media);
+        if (started) mediaPlayer.play();
 
         System.out.println(LibVlc.INSTANCE.libvlc_get_version());
     }
@@ -79,55 +68,38 @@ public class Test implements ApplicationListener {
 
     @Override
     public void render() {
-        Gdx.gl.glClearColor(1, 1, 1, 1);
-//        Gdx.gl.glClearColor(0, 0, 0, 0);
+        Gdx.gl.glClearColor(0, 0, 0, 0);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
         batch.begin();
-/*
         if (pixmap != null) {
             Texture texture = new Texture(pixmap);
             batch.draw(texture, 0, 0, w, h);
         }
-*/
 
         font.draw(batch, "FPS: " + Gdx.graphics.getFramesPerSecond(), 10, 20);
         batch.end();
     }
 
-    private final class TestRenderCallback extends RenderCallbackAdapter {
-
-        public TestRenderCallback() {
-            super(((DataBufferInt) image.getRaster().getDataBuffer()).getData());
-        }
+    private final class TestRenderCallback implements RenderCallback {
 
         @Override
-        public void onDisplay(DirectMediaPlayer mediaPlayer, int[] data) {
-
-            ByteBuffer byteBuffer = ByteBuffer.allocateDirect(data.length * 4).order(ByteOrder.nativeOrder());
-            IntBuffer intBuffer = byteBuffer.asIntBuffer();
-            intBuffer.put(data);
-
-            try {
-
-//                long[] nativeData = new long[]{0, (long) w, (long) h, Gdx2DPixmap.GDX2D_FORMAT_RGBA8888};
-                long[] nativeData = new long[]{0, (long) w, (long) h, Gdx2DPixmap.GDX2D_FORMAT_RGB888};
-                Gdx2DPixmap pixmapData = new Gdx2DPixmap(byteBuffer, nativeData);
-                pixmap = new Pixmap(pixmapData);
-            } catch (Exception e) {
-                pixmap = null;
-                throw new GdxRuntimeException("Couldn't load pixmap from image data", e);
-            }
-
+        public void display(DirectMediaPlayer mediaPlayer, Memory[] nativeBuffers, BufferFormat bufferFormat) {
+            w = bufferFormat.getWidth();
+            h = bufferFormat.getHeight();
+            ByteBuffer buffer = nativeBuffers[0].getByteBuffer(0, (long)(h * w * Gdx2DPixmap.GDX2D_FORMAT_RGBA8888));
+            long[] nativeData = new long[]{0, (long) w, (long) h, Gdx2DPixmap.GDX2D_FORMAT_RGBA8888};
+            Gdx2DPixmap gdx2DPixmap = new Gdx2DPixmap(buffer, nativeData);
+            pixmap = new Pixmap(gdx2DPixmap);
         }
+
     }
 
     private final class TestBufferFormatCallback implements BufferFormatCallback {
 
         @Override
         public BufferFormat getBufferFormat(int sourceWidth, int sourceHeight) {
-//            return new BufferFormat("RGBA", sourceWidth, sourceHeight, new int[] { sourceWidth * 4 }, new int[] { sourceHeight });
-            return new RV32BufferFormat((int) w, (int) h);
+            return new BufferFormat("RGBA", sourceWidth, sourceHeight, new int[] { sourceWidth * Gdx2DPixmap.GDX2D_FORMAT_RGBA8888 }, new int[] { sourceHeight });
         }
 
     }
