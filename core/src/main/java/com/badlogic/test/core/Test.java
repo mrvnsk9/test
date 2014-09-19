@@ -22,6 +22,7 @@ import uk.co.caprica.vlcj.runtime.RuntimeUtil;
 import uk.co.caprica.vlcj.runtime.x.LibXUtil;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Test implements ApplicationListener {
 
@@ -31,7 +32,9 @@ public class Test implements ApplicationListener {
     float w = 854;
     float h = 480;
 
-    private Pixmap pixmap;
+    private Pixmap pixmap = null;
+    private Texture texture = null;
+    private AtomicBoolean dirty = new AtomicBoolean(false);
 
     @Override
     public void create() {
@@ -55,8 +58,7 @@ public class Test implements ApplicationListener {
 
         MediaPlayerFactory factory = new MediaPlayerFactory(args);
         DirectMediaPlayer mediaPlayer = factory.newDirectMediaPlayer(new TestBufferFormatCallback(), new TestRenderCallback());
-        boolean started = mediaPlayer.prepareMedia(media);
-        if (started) mediaPlayer.play();
+        mediaPlayer.startMedia(media);
 
         System.out.println(LibVlc.INSTANCE.libvlc_get_version());
     }
@@ -69,39 +71,20 @@ public class Test implements ApplicationListener {
     @Override
     public void render() {
         Gdx.gl.glClearColor(0, 0, 0, 0);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT); /* This clears the screen */
 
         batch.begin();
-        if (pixmap != null) {
-            Texture texture = new Texture(pixmap);
+        batch.disableBlending();
+        if (dirty.get() && pixmap != null) {
+            if (texture == null) texture = new Texture(pixmap.getWidth(), pixmap.getHeight(), pixmap.getFormat());
+            texture.draw(pixmap, 0, 0);
             batch.draw(texture, 0, 0, w, h);
+            dirty.set(false);
         }
+        batch.enableBlending();
 
         font.draw(batch, "FPS: " + Gdx.graphics.getFramesPerSecond(), 10, 20);
         batch.end();
-    }
-
-    private final class TestRenderCallback implements RenderCallback {
-
-        @Override
-        public void display(DirectMediaPlayer mediaPlayer, Memory[] nativeBuffers, BufferFormat bufferFormat) {
-            w = bufferFormat.getWidth();
-            h = bufferFormat.getHeight();
-            ByteBuffer buffer = nativeBuffers[0].getByteBuffer(0, (long)(h * w * Gdx2DPixmap.GDX2D_FORMAT_RGBA8888));
-            long[] nativeData = new long[]{0, (long) w, (long) h, Gdx2DPixmap.GDX2D_FORMAT_RGBA8888};
-            Gdx2DPixmap gdx2DPixmap = new Gdx2DPixmap(buffer, nativeData);
-            pixmap = new Pixmap(gdx2DPixmap);
-        }
-
-    }
-
-    private final class TestBufferFormatCallback implements BufferFormatCallback {
-
-        @Override
-        public BufferFormat getBufferFormat(int sourceWidth, int sourceHeight) {
-            return new BufferFormat("RGBA", sourceWidth, sourceHeight, new int[] { sourceWidth * Gdx2DPixmap.GDX2D_FORMAT_RGBA8888 }, new int[] { sourceHeight });
-        }
-
     }
 
     @Override
@@ -114,5 +97,27 @@ public class Test implements ApplicationListener {
 
     @Override
     public void resume() {
+    }
+
+    private final class TestRenderCallback implements RenderCallback {
+
+        @Override
+        public void display(DirectMediaPlayer mediaPlayer, Memory[] nativeBuffers, BufferFormat bufferFormat) {
+            ByteBuffer buffer = nativeBuffers[0].getByteBuffer(0, (long) (h * w * 4));
+            long[] nativeData = new long[]{0, (long) w, (long) h, Gdx2DPixmap.GDX2D_FORMAT_RGBA8888};
+            Gdx2DPixmap gdx2DPixmap = new Gdx2DPixmap(buffer, nativeData);
+            pixmap = new Pixmap(gdx2DPixmap);
+            dirty.set(true);
+        }
+
+    }
+
+    private final class TestBufferFormatCallback implements BufferFormatCallback {
+
+        @Override
+        public BufferFormat getBufferFormat(int sourceWidth, int sourceHeight) {
+            return new BufferFormat("RGBA", sourceWidth, sourceHeight, new int[] { sourceWidth * 4 }, new int[] { sourceHeight });
+        }
+
     }
 }
